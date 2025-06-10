@@ -1,0 +1,271 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+
+@layer base {
+  html {
+    font-family: 'Inter', system-ui, sans-serif;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  body {
+    @apply bg-neutral-50 text-neutral-900;
+    overscroll-behavior: none;
+  }
+
+  /* iOS Safari specific fixes */
+  body {
+    -webkit-touch-callout: none;
+    -webkit-user-select: none;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  /* PWA viewport fixes */
+  @supports (padding: max(0px)) {
+    body {
+      padding-left: max(12px, env(safe-area-inset-left));
+      padding-right: max(12px, env(safe-area-inset-right));
+    }
+  }
+
+  /* Custom scrollbar */
+  ::-webkit-scrollbar {
+    width: 6px;
+  }
+
+  ::-webkit-scrollbar-track {
+    @apply bg-neutral-100;
+  }
+
+  ::-webkit-scrollbar-thumb {
+    @apply bg-neutral-300 rounded-full;
+  }
+
+  ::-webkit-scrollbar-thumb:hover {
+    @apply bg-neutral-400;
+  }
+}
+
+@layer components {
+  /* Button Components */
+  .btn {
+    @apply inline-flex items-center justify-center px-4 py-2 text-sm font-medium rounded-lg transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed;
+  }
+
+  .btn-primary {
+    @apply btn bg-primary-600 text-white hover:bg-primary-700 focus:ring-primary-500;
+  }
+
+  .btn-secondary {
+    @apply btn bg-neutral-200 text-neutral-900 hover:bg-neutral-300 focus:ring-neutral-500;
+  }
+
+  .btn-accent {
+    @apply btn bg-accent-600 text-white hover:bg-accent-700 focus:ring-accent-500;
+  }
+
+  .btn-ghost {
+    @apply btn bg-transparent text-neutral-700 hover:bg-neutral-100 focus:ring-neutral-500;
+  }
+
+  .btn-sm {
+    @apply px-3 py-1.5 text-xs;
+  }
+
+  .btn-lg {
+    @apply px-6 py-3 text-base;
+  }
+
+  /* Card Components */
+  .card {
+    @apply bg-white rounded-xl shadow-sm border border-neutral-200;
+  }
+
+  .card-hover {
+    @apply card transition-all duration-200 hover:shadow-md hover:border-neutral-300;
+  }
+
+  /* Input Components */
+  .input {
+    @apply block w-full px-3 py-2 text-sm border border-neutral-300 rounded-lg bg-white placeholder-neutral-500 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent;
+  }
+
+  .input-error {
+    @apply input border-red-300 focus:ring-red-500;
+  }
+
+  /* Recording Button */
+  .record-button {
+    @apply relative w-20 h-20 bg-red-500 rounded-full flex items-center justify-center text-white shadow-lg transition-all duration-200 active:scale-95;
+  }
+
+  .record-button.recording {
+    @apply animate-recording;
+  }
+
+  .record-button:active {
+    @apply bg-red-600 shadow-xl;
+  }
+
+  /* Audio Visualizer */
+  .audio-visualizer {
+    @apply flex items-end justify-center space-x-1 h-12;
+  }
+
+  .audio-bar {
+    @apply w-1 bg-primary-500 rounded-full transition-all duration-100;
+  }
+
+  /* Mood Card */
+  .mood-card {
+    @apply card-hover p-4 cursor-pointer select-none;
+  }
+
+  .mood-card.selected {
+    @apply ring-2 ring-primary-500 border-primary-300;
+  }
+
+  /* Loading States */
+  .loading-spinner {
+    @apply animate-spin rounded-full border-2 border-neutral-200 border-t-primary-600;
+  }
+
+  .loading-dots {
+    @apply flex space-x-1;
+  }
+
+  .loading-dot {
+    @apply w-2 h-2 bg-primary-600 rounded-full animate-bounce;
+  }
+
+  .loading-dot:nth-child(2) {
+    animation-delay: 0.1s;
+  }
+
+  .loading-dot:nth-child(3) {
+    animation-delay: 0.2s;
+  }
+
+  /* Toast Notifications */
+  .toast {
+    @apply fixed bottom-4 left-4 right-4 mx-auto max-w-sm bg-white border border-neutral-200 rounded-lg shadow-lg p-4 z-50 animate-slide-up;
+  }
+
+  .toast-success {
+    @apply toast border-green-200 bg-green-50;
+  }
+
+  .toast-error {
+    @apply toast border-red-200 bg-red-50;
+  }
+
+  .toast-warning {
+    @apply toast border-yellow-200 bg-yellow-50;
+  }
+
+  /* Modal */
+  .modal-overlay {
+    @apply fixed inset-0 bg-black bg-opacity-50 z-40 animate-fade-in;
+  }
+
+  .modal-content {
+    @apply fixed inset-x-4 top-1/2 transform -translate-y-1/2 bg-white rounded-xl shadow-xl z-50 animate-slide-up max-h-[90vh] overflow-y-auto;
+  }
+
+  /* Navigation */
+  .nav-item {
+    @apply flex items-center space-x-2 px-3 py-2 text-sm font-medium rounded-lg transition-colors duration-200;
+  }
+
+  .nav-item.active {
+    @apply bg-primary-100 text-primary-700;
+  }
+
+  .nav-item:hover:not(.active) {
+    @apply bg-neutral-100 text-neutral-700;
+  }
+}
+
+@layer utilities {
+  /* Safe Area Utilities */
+  .safe-top {
+    padding-top: env(safe-area-inset-top);
+  }
+
+  .safe-bottom {
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+
+  .safe-left {
+    padding-left: env(safe-area-inset-left);
+  }
+
+  .safe-right {
+    padding-right: env(safe-area-inset-right);
+  }
+
+  /* Touch Utilities */
+  .touch-manipulation {
+    touch-action: manipulation;
+  }
+
+  .touch-none {
+    touch-action: none;
+  }
+
+  /* Backdrop Utilities */
+  .backdrop-blur-xs {
+    backdrop-filter: blur(2px);
+  }
+
+  /* Text Utilities */
+  .text-balance {
+    text-wrap: balance;
+  }
+
+  /* Gradient Utilities */
+  .gradient-primary {
+    background: linear-gradient(135deg, theme('colors.primary.500'), theme('colors.primary.700'));
+  }
+
+  .gradient-secondary {
+    background: linear-gradient(135deg, theme('colors.secondary.500'), theme('colors.secondary.700'));
+  }
+
+  .gradient-accent {
+    background: linear-gradient(135deg, theme('colors.accent.500'), theme('colors.accent.700'));
+  }
+
+  /* Animation Utilities */
+  .animate-fade-in-up {
+    animation: fadeInUp 0.5s ease-out;
+  }
+
+  @keyframes fadeInUp {
+    from {
+      opacity: 0;
+      transform: translateY(20px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+
+  /* Focus Utilities */
+  .focus-ring {
+    @apply focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-2;
+  }
+
+  .focus-ring-inset {
+    @apply focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-inset;
+  }
+}
+
+/* Dark mode support (future enhancement) */
+@media (prefers-color-scheme: dark) {
+  /* Dark mode styles will be added here in future iterations */
+}
