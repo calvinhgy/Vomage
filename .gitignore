@@ -89,3 +89,19 @@ build/
 .env.development.local
 .env.test.local
 .env.production.local
+
+# SSL certificates
+ssl/
+
+# Production environment
+.env.production
+
+# Logs and backups
+logs/
+backups/
+
+# Scripts
+get-docker.sh
+
+# Temporary files
+*.json

@@ -1,0 +1,3 @@
+Error: Minified React error #423; visit https://reactjs.org/docs/error-decoder.html?invariant=423 for the full message or use the non-minified dev environment for full errors and additional helpful warnings.
+
+Failed to load resource: the server responded with a status of 400 ()https://18.204.35.132:8443/_next/image?url=https%3A%2F%2Fimages.unsplash.com%2Fphoto-1513475382585-d06e58bcb0e0%3Fw%3D400%26h%3D400%26fit%3Dcrop&w=1200&q=75

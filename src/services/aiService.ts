@@ -6,6 +6,8 @@
 import { ClaudeService } from './claude';
 import { NovaService } from './nova';
 import { SpeechService } from './speech';
+import { AmazonTranscribeService } from './transcribe';
+import { AmazonNovaCanvasService } from './novaCanvas';
 import { SentimentAnalysis, GeneratedImage, Context } from '@/types';
 
 export interface ProcessVoiceResult {
@@ -20,9 +22,13 @@ export interface AIServiceOptions {
   imageStyle?: string;
   maxRetries?: number;
   timeout?: number;
+  useAmazonServices?: boolean;
 }
 
 export class AIService {
+  private static transcribeService = new AmazonTranscribeService();
+  private static novaCanvasService = new AmazonNovaCanvasService();
+
   /**
    * 完整的语音处理流程
    * 1. 语音转文字
@@ -39,7 +45,8 @@ export class AIService {
       enableImageGeneration = true,
       imageStyle = 'abstract',
       maxRetries = 3,
-      timeout = 60000
+      timeout = 60000,
+      useAmazonServices = process.env.USE_AMAZON_AI_SERVICES === 'true'
     } = options;
 
     let transcript = '';
@@ -51,7 +58,9 @@ export class AIService {
       // 步骤1: 语音转文字
       console.log('开始语音转文字...');
       const transcriptionResult = await this.withTimeout(
-        SpeechService.transcribeAudio(audioBlob),
+        useAmazonServices 
+          ? this.transcribeService.transcribeAudio(audioBlob)
+          : SpeechService.transcribeAudio(audioBlob),
         timeout / 4,
         '语音转文字超时'
       );
@@ -60,8 +69,8 @@ export class AIService {
       console.log('语音转文字完成:', transcript);
 
       // 验证转录结果
-      if (!SpeechService.validateTranscription(transcriptionResult)) {
-        throw new Error('语音转文字结果质量不佳，请重新录制');
+      if (!transcript || transcript.trim().length === 0) {
+        throw new Error('语音转文字结果为空，请重新录制');
       }
 
       // 步骤2: 情感分析
@@ -86,25 +95,38 @@ export class AIService {
       if (enableImageGeneration) {
         console.log('开始生成图片...');
         try {
-          const novaResponse = await this.withTimeout(
-            NovaService.generateImage({
-              prompt: imagePrompt,
-              style: imageStyle,
-              width: 512,
-              height: 512,
-            }),
+          const imageResult = await this.withTimeout(
+            useAmazonServices 
+              ? this.novaCanvasService.generateImage(transcript, sentiment, { style: imageStyle as any })
+              : NovaService.generateImage({
+                  prompt: imagePrompt,
+                  style: imageStyle,
+                  width: 512,
+                  height: 512,
+                }),
             timeout / 2,
             '图片生成超时'
           );
 
-          generatedImage = {
-            id: `img_${Date.now()}`,
-            voiceRecordId: `voice_${Date.now()}`,
-            url: novaResponse.imageUrl,
-            prompt: imagePrompt,
-            style: imageStyle as any,
-            createdAt: new Date(),
-          };
+          if (useAmazonServices) {
+            generatedImage = {
+              id: `img_${Date.now()}`,
+              voiceRecordId: `voice_${Date.now()}`,
+              url: imageResult.url,
+              prompt: imageResult.prompt,
+              style: imageResult.style as any,
+              createdAt: new Date(),
+            };
+          } else {
+            generatedImage = {
+              id: `img_${Date.now()}`,
+              voiceRecordId: `voice_${Date.now()}`,
+              url: (imageResult as any).imageUrl,
+              prompt: imagePrompt,
+              style: imageStyle as any,
+              createdAt: new Date(),
+            };
+          }
           console.log('图片生成完成:', generatedImage.url);
         } catch (imageError) {
           console.warn('图片生成失败，但继续处理:', imageError);

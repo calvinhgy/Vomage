@@ -7,7 +7,7 @@ import { SentimentAnalysis, Context, Mood } from '@/types';
 
 export interface VoiceRecordDocument {
   _id?: ObjectId;
-  userId: ObjectId;
+  userId: string; // 改为字符串类型以支持临时用户ID
   audioUrl: string;
   audioSize: number;
   duration: number;

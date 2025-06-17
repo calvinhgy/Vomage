@@ -63,6 +63,7 @@ services:
       - ./nginx/conf.d:/etc/nginx/conf.d:ro
       - ./ssl:/etc/nginx/ssl:ro
       - ./logs/nginx:/var/log/nginx
+      - ./public:/var/www/html/public:ro
     depends_on:
       - app
     restart: unless-stopped

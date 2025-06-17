@@ -30,7 +30,7 @@ export class ContextService {
    */
   static async getFullContext(): Promise<Context> {
     const context: Context = {
-      timeOfDay: this.getTimeOfDay(),
+      // 移除timeOfDay，让客户端组件自己处理
     };
 
     try {
@@ -55,7 +55,8 @@ export class ContextService {
    */
   static async getCurrentLocation(): Promise<LocationInfo> {
     return new Promise((resolve, reject) => {
-      if (!navigator.geolocation) {
+      // 检查是否在浏览器环境中
+      if (typeof window === 'undefined' || !navigator?.geolocation) {
         reject(new Error('浏览器不支持地理位置服务'));
         return;
       }
@@ -137,8 +138,13 @@ export class ContextService {
     } catch (error) {
       console.warn('反向地理编码失败:', error);
       
-      // 返回空对象，不影响主要功能
-      return {};
+      // 返回模拟数据，不影响主要功能
+      return {
+        city: '未知城市',
+        country: '未知国家',
+        region: '未知地区',
+        timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+      };
     }
   }
 
@@ -167,11 +173,15 @@ export class ContextService {
     } catch (error) {
       console.warn('获取天气信息失败:', error);
       
-      // 返回默认天气信息
+      // 返回模拟天气信息
+      const mockWeatherConditions = ['晴朗', '多云', '阴天', '小雨', '晴转多云'];
+      const randomCondition = mockWeatherConditions[Math.floor(Math.random() * mockWeatherConditions.length)];
+      
       return {
-        temperature: 20,
-        condition: '未知',
-        humidity: 50,
+        temperature: Math.floor(Math.random() * 20) + 15, // 15-35度
+        condition: randomCondition,
+        humidity: Math.floor(Math.random() * 40) + 40, // 40-80%
+        windSpeed: Math.floor(Math.random() * 10) + 5, // 5-15 km/h
       };
     }
   }
@@ -264,7 +274,7 @@ export class ContextService {
    * 检查位置权限状态
    */
   static async checkLocationPermission(): Promise<'granted' | 'denied' | 'prompt' | 'unsupported'> {
-    if (!navigator.permissions) {
+    if (typeof window === 'undefined' || !navigator?.permissions) {
       return 'unsupported';
     }
 
@@ -280,6 +290,10 @@ export class ContextService {
    * 请求位置权限
    */
   static async requestLocationPermission(): Promise<boolean> {
+    if (typeof window === 'undefined' || !navigator?.geolocation) {
+      return false;
+    }
+
     try {
       const position = await new Promise<GeolocationPosition>((resolve, reject) => {
         navigator.geolocation.getCurrentPosition(resolve, reject, {

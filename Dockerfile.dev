@@ -28,5 +28,5 @@ ENV HOSTNAME "0.0.0.0"
 # 暴露端口
 EXPOSE 3000
 
-# 启动应用
-CMD ["node", ".next/standalone/server.js"]
+# 启动应用 - 使用标准的 next start
+CMD ["npm", "start"]

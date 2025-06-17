@@ -122,7 +122,7 @@ async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
 
     // 创建语音记录
     const voiceRecord = VoiceRecordModel.createVoiceRecord({
-      userId: new ObjectId(req.userId!),
+      userId: req.userId!, // 直接使用字符串，不转换为ObjectId
       audioUrl: uploadResult.url,
       audioSize: uploadResult.size,
       duration,
@@ -136,8 +136,12 @@ async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
     const insertResult = await voiceRecordCollection.insertOne(voiceRecord);
     voiceRecord._id = insertResult.insertedId;
 
+    console.log('语音记录已保存，ID:', voiceRecord._id);
+
     // 异步处理 AI 分析
-    processVoiceRecordAsync(voiceRecord._id.toString(), audioBuffer, context);
+    const recordId = voiceRecord._id.toString();
+    console.log('开始异步处理，记录ID:', recordId);
+    processVoiceRecordAsync(recordId, audioBuffer, context);
 
     // 返回成功响应
     res.status(201).json({
@@ -176,6 +180,13 @@ async function processVoiceRecordAsync(
   context?: Context
 ): Promise<void> {
   try {
+    console.log('开始异步处理语音记录:', voiceRecordId);
+    
+    // 验证ObjectId格式
+    if (!ObjectId.isValid(voiceRecordId)) {
+      throw new Error(`无效的记录ID格式: ${voiceRecordId}`);
+    }
+
     const voiceRecordCollection = getVoiceRecordCollection();
     
     // 更新处理状态

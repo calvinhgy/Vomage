@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   SunIcon, 
   MoonIcon, 
@@ -16,10 +16,29 @@ export const ContextDisplay: React.FC<ContextDisplayProps> = ({
   context,
   className = '',
 }) => {
-  const { location, weather, timeOfDay } = context;
+  const { location, weather } = context;
+  const [timeOfDay, setTimeOfDay] = useState<string>('');
+  const [mounted, setMounted] = useState(false);
+
+  // 只在客户端设置时间
+  useEffect(() => {
+    setMounted(true);
+    const hour = new Date().getHours();
+    if (hour >= 5 && hour < 12) {
+      setTimeOfDay('morning');
+    } else if (hour >= 12 && hour < 17) {
+      setTimeOfDay('afternoon');
+    } else if (hour >= 17 && hour < 21) {
+      setTimeOfDay('evening');
+    } else {
+      setTimeOfDay('night');
+    }
+  }, []);
 
   // 获取时间段图标
   const getTimeIcon = () => {
+    if (!mounted) return <SunIcon className="w-5 h-5 text-neutral-500" />;
+    
     switch (timeOfDay) {
       case 'morning':
         return <SunIcon className="w-5 h-5 text-yellow-500" />;
@@ -36,6 +55,8 @@ export const ContextDisplay: React.FC<ContextDisplayProps> = ({
 
   // 获取时间段描述
   const getTimeDescription = () => {
+    if (!mounted) return '你好';
+    
     switch (timeOfDay) {
       case 'morning':
         return '早上好';

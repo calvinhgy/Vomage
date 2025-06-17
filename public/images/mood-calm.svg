@@ -1,0 +1,14 @@
+<svg width="400" height="400" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="calmGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#87CEEB;stop-opacity:1" />
+      <stop offset="50%" style="stop-color:#4682B4;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#2F4F4F;stop-opacity:1" />
+    </linearGradient>
+  </defs>
+  <rect width="400" height="400" fill="url(#calmGrad)" />
+  <circle cx="200" cy="200" r="60" fill="rgba(255,255,255,0.2)" />
+  <circle cx="200" cy="200" r="40" fill="rgba(255,255,255,0.1)" />
+  <circle cx="200" cy="200" r="20" fill="rgba(255,255,255,0.1)" />
+  <text x="200" y="320" font-family="Arial" font-size="18" fill="white" text-anchor="middle" font-weight="bold">CALM</text>
+</svg>

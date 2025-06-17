@@ -58,7 +58,7 @@ export interface Context {
     condition: string;
     humidity: number;
   };
-  timeOfDay: 'morning' | 'afternoon' | 'evening' | 'night';
+  timeOfDay?: 'morning' | 'afternoon' | 'evening' | 'night';
 }
 
 // API 响应类型

@@ -1,0 +1,16 @@
+<svg width="400" height="400" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="thoughtfulGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#9370DB;stop-opacity:1" />
+      <stop offset="50%" style="stop-color:#8A2BE2;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#4B0082;stop-opacity:1" />
+    </linearGradient>
+  </defs>
+  <rect width="400" height="400" fill="url(#thoughtfulGrad)" />
+  <circle cx="200" cy="200" r="80" fill="rgba(255,255,255,0.1)" stroke="rgba(255,255,255,0.3)" stroke-width="2" />
+  <circle cx="200" cy="200" r="4" fill="rgba(255,255,255,0.8)" />
+  <circle cx="180" cy="180" r="2" fill="rgba(255,255,255,0.6)" />
+  <circle cx="220" cy="220" r="2" fill="rgba(255,255,255,0.6)" />
+  <circle cx="220" cy="180" r="2" fill="rgba(255,255,255,0.4)" />
+  <text x="200" y="320" font-family="Arial" font-size="16" fill="white" text-anchor="middle" font-weight="bold">THOUGHTFUL</text>
+</svg>

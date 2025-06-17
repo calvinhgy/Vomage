@@ -5,22 +5,53 @@
 export class AudioRecorder {
   private mediaRecorder: MediaRecorder | null = null;
   private audioChunks: Blob[] = [];
-  private stream: MediaStream | null = null;
+  public stream: MediaStream | null = null; // 改为public以便外部访问
 
   /**
    * 初始化录音器
    */
   async initialize(): Promise<void> {
     try {
+      // 检查浏览器环境
+      if (typeof window === 'undefined' || !navigator?.mediaDevices) {
+        throw new Error('浏览器不支持录音功能');
+      }
+
+      // 检查是否为iOS设备
+      const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
+      
+      const audioConstraints = isIOS ? {
+        // iOS Safari 需要更简单的音频配置
+        echoCancellation: false,
+        noiseSuppression: false,
+        autoGainControl: false,
+        sampleRate: 44100,
+      } : {
+        // 其他设备使用完整配置
+        echoCancellation: true,
+        noiseSuppression: true,
+        autoGainControl: true,
+        sampleRate: 44100,
+      };
+
       this.stream = await navigator.mediaDevices.getUserMedia({
-        audio: {
-          echoCancellation: true,
-          noiseSuppression: true,
-          autoGainControl: true,
-          sampleRate: 44100,
-        },
+        audio: audioConstraints,
       });
+      
+      console.log('Audio stream initialized for', isIOS ? 'iOS' : 'other device');
     } catch (error) {
+      console.error('Audio initialization error:', error);
+      
+      if (error instanceof Error) {
+        if (error.name === 'NotAllowedError') {
+          throw new Error('麦克风权限被拒绝，请在浏览器设置中允许访问');
+        } else if (error.name === 'NotFoundError') {
+          throw new Error('未找到麦克风设备，请检查设备连接');
+        } else if (error.name === 'NotSupportedError') {
+          throw new Error('浏览器不支持录音功能，请使用现代浏览器');
+        }
+      }
+      
       throw new Error('无法访问麦克风，请检查权限设置');
     }
   }
@@ -89,20 +120,45 @@ export class AudioRecorder {
    * 获取支持的MIME类型
    */
   private getSupportedMimeType(): string {
-    const types = [
+    // 检查浏览器环境
+    if (typeof window === 'undefined' || !navigator?.userAgent) {
+      return 'audio/webm';
+    }
+
+    // 检查是否为iOS设备
+    const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
+    
+    // iOS Safari 优先支持的格式
+    const iosTypes = [
+      'audio/mp4',
+      'audio/aac',
+      'audio/webm;codecs=opus',
+      'audio/webm',
+      'audio/wav',
+    ];
+    
+    // 其他浏览器支持的格式
+    const standardTypes = [
       'audio/webm;codecs=opus',
       'audio/webm',
       'audio/mp4',
+      'audio/wav',
       'audio/mpeg',
     ];
 
-    for (const type of types) {
+    const typesToCheck = isIOS ? iosTypes : standardTypes;
+
+    for (const type of typesToCheck) {
       if (MediaRecorder.isTypeSupported(type)) {
+        console.log('选择的音频格式:', type);
         return type;
       }
     }
 
-    return 'audio/webm'; // 默认类型
+    // 如果都不支持，返回最基础的格式
+    const fallbackType = isIOS ? 'audio/mp4' : 'audio/webm';
+    console.log('使用回退音频格式:', fallbackType);
+    return fallbackType;
   }
 
   /**
@@ -110,12 +166,21 @@ export class AudioRecorder {
    */
   static async checkPermission(): Promise<boolean> {
     try {
+      // 检查浏览器环境
+      if (typeof window === 'undefined' || !navigator?.permissions) {
+        return false;
+      }
+
       const permission = await navigator.permissions.query({
         name: 'microphone' as PermissionName,
       });
       return permission.state === 'granted';
     } catch {
       // 如果不支持权限API，尝试直接访问麦克风
+      if (typeof window === 'undefined' || !navigator?.mediaDevices) {
+        return false;
+      }
+
       try {
         const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
         stream.getTracks().forEach((track) => track.stop());

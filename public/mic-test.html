@@ -1,0 +1,259 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>麦克风测试 - Vomage</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background-color: #f9fafb;
+            margin: 0;
+            padding: 20px;
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .container {
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            padding: 32px;
+            max-width: 500px;
+            width: 100%;
+        }
+        h1 {
+            text-align: center;
+            color: #1f2937;
+            margin-bottom: 24px;
+        }
+        .info-box {
+            background: #f3f4f6;
+            padding: 16px;
+            border-radius: 8px;
+            margin-bottom: 24px;
+        }
+        .info-box h3 {
+            margin: 0 0 12px 0;
+            color: #374151;
+        }
+        .info-box p {
+            margin: 4px 0;
+            font-size: 14px;
+            color: #6b7280;
+        }
+        .status {
+            text-align: center;
+            margin: 24px 0;
+            padding: 16px;
+            border-radius: 8px;
+            font-weight: 500;
+        }
+        .status.waiting {
+            background: #e5e7eb;
+            color: #374151;
+        }
+        .status.loading {
+            background: #dbeafe;
+            color: #1d4ed8;
+        }
+        .status.success {
+            background: #d1fae5;
+            color: #065f46;
+        }
+        .status.error {
+            background: #fee2e2;
+            color: #991b1b;
+        }
+        button {
+            display: block;
+            width: 100%;
+            padding: 12px 24px;
+            background: #3b82f6;
+            color: white;
+            border: none;
+            border-radius: 8px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            margin-bottom: 16px;
+        }
+        button:hover:not(:disabled) {
+            background: #2563eb;
+        }
+        button:disabled {
+            background: #9ca3af;
+            cursor: not-allowed;
+        }
+        .tips {
+            font-size: 14px;
+            color: #6b7280;
+            line-height: 1.5;
+        }
+        .tips li {
+            margin-bottom: 4px;
+        }
+        .ios-tips {
+            background: #ecfdf5;
+            border: 1px solid #a7f3d0;
+            padding: 16px;
+            border-radius: 8px;
+            margin-top: 16px;
+        }
+        .ios-tips h4 {
+            color: #065f46;
+            margin: 0 0 8px 0;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🎤 麦克风权限测试</h1>
+        
+        <div class="info-box">
+            <h3>环境信息</h3>
+            <p id="protocol">协议: 检测中...</p>
+            <p id="hostname">主机: 检测中...</p>
+            <p id="port">端口: 检测中...</p>
+            <p id="secure">安全上下文: 检测中...</p>
+            <p id="device">设备类型: 检测中...</p>
+            <p id="browser">浏览器: 检测中...</p>
+        </div>
+        
+        <div id="status" class="status waiting">
+            点击下方按钮开始测试麦克风权限
+        </div>
+        
+        <button id="testBtn" onclick="testMicrophone()">
+            🎤 测试麦克风权限
+        </button>
+        
+        <div class="tips">
+            <strong>使用说明：</strong>
+            <ul>
+                <li>点击按钮后浏览器会请求麦克风权限</li>
+                <li>请在弹出的对话框中点击"允许"</li>
+                <li>如果没有弹出对话框，请检查浏览器设置</li>
+            </ul>
+        </div>
+        
+        <div id="iosTips" class="ios-tips" style="display: none;">
+            <h4>📱 iPhone 用户特别提示</h4>
+            <ol>
+                <li>确保使用最新版Safari浏览器</li>
+                <li>点击地址栏左侧的"aA"图标 → 网站设置 → 允许麦克风</li>
+                <li>或者：设置 → Safari → 网站设置 → 麦克风 → 允许</li>
+            </ol>
+        </div>
+    </div>
+
+    <script>
+        // 页面加载时获取环境信息
+        window.addEventListener('load', function() {
+            console.log('页面加载完成');
+            
+            // 更新环境信息
+            document.getElementById('protocol').textContent = '协议: ' + window.location.protocol;
+            document.getElementById('hostname').textContent = '主机: ' + window.location.hostname;
+            document.getElementById('port').textContent = '端口: ' + (window.location.port || (window.location.protocol === 'https:' ? '443' : '80'));
+            document.getElementById('secure').textContent = '安全上下文: ' + (window.isSecureContext ? '是' : '否');
+            
+            // 检测设备和浏览器
+            const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
+            const browser = /Safari/.test(navigator.userAgent) && !/Chrome/.test(navigator.userAgent) ? 'Safari' :
+                           /Chrome/.test(navigator.userAgent) ? 'Chrome' :
+                           /Firefox/.test(navigator.userAgent) ? 'Firefox' : '其他';
+            
+            document.getElementById('device').textContent = '设备类型: ' + (isIOS ? 'iOS设备' : '其他设备');
+            document.getElementById('browser').textContent = '浏览器: ' + browser;
+            
+            // 如果是iOS设备，显示特殊提示
+            if (isIOS) {
+                document.getElementById('iosTips').style.display = 'block';
+            }
+            
+            console.log('环境信息更新完成');
+            console.log('User Agent:', navigator.userAgent);
+            console.log('支持getUserMedia:', !!(navigator.mediaDevices && navigator.mediaDevices.getUserMedia));
+        });
+        
+        async function testMicrophone() {
+            console.log('开始测试麦克风权限');
+            
+            const statusEl = document.getElementById('status');
+            const btnEl = document.getElementById('testBtn');
+            
+            // 更新状态
+            statusEl.className = 'status loading';
+            statusEl.textContent = '正在请求麦克风权限...';
+            btnEl.disabled = true;
+            btnEl.textContent = '测试中...';
+            
+            try {
+                // 检查基本支持
+                if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+                    throw new Error('浏览器不支持getUserMedia API');
+                }
+                
+                console.log('开始请求麦克风权限...');
+                
+                // 检测是否为iOS设备，使用不同的音频配置
+                const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
+                const audioConstraints = isIOS ? {
+                    echoCancellation: false,
+                    noiseSuppression: false,
+                    autoGainControl: false
+                } : {
+                    echoCancellation: true,
+                    noiseSuppression: true,
+                    autoGainControl: true
+                };
+                
+                console.log('使用音频配置:', audioConstraints);
+                
+                // 请求麦克风权限
+                const stream = await navigator.mediaDevices.getUserMedia({ 
+                    audio: audioConstraints 
+                });
+                
+                console.log('✅ 成功获取麦克风权限');
+                console.log('音频轨道数量:', stream.getAudioTracks().length);
+                
+                // 立即停止流以释放资源
+                stream.getTracks().forEach(track => {
+                    console.log('停止音频轨道:', track.kind);
+                    track.stop();
+                });
+                
+                // 显示成功状态
+                statusEl.className = 'status success';
+                statusEl.textContent = '✅ 成功获取麦克风权限！现在可以使用录音功能了。';
+                btnEl.textContent = '🔄 重新测试';
+                
+            } catch (error) {
+                console.error('麦克风权限测试失败:', error);
+                
+                // 根据错误类型显示不同的提示
+                let errorMessage = '❌ 麦克风权限测试失败: ';
+                
+                if (error.name === 'NotAllowedError') {
+                    errorMessage += '权限被拒绝。请在浏览器设置中允许麦克风访问。';
+                } else if (error.name === 'NotFoundError') {
+                    errorMessage += '未找到麦克风设备。请检查设备连接。';
+                } else if (error.name === 'NotSupportedError') {
+                    errorMessage += '浏览器不支持麦克风访问。';
+                } else {
+                    errorMessage += error.message;
+                }
+                
+                statusEl.className = 'status error';
+                statusEl.textContent = errorMessage;
+                btnEl.textContent = '🔄 重新尝试';
+            } finally {
+                btnEl.disabled = false;
+            }
+        }
+    </script>
+</body>
+</html>
