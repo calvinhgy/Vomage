@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { MicrophoneIcon, StopIcon } from '@heroicons/react/24/solid';
 import { useAppStore } from '@/store/useAppStore';
 import { AudioRecorder, AudioVisualizer, formatDuration } from '@/utils/audio';
+import { useImagePreloader } from '@/hooks/useImagePreloader';
 
 interface RecordButtonProps {
   onRecordingComplete?: (audioBlob: Blob) => void;
@@ -25,6 +26,12 @@ export const RecordButton: React.FC<RecordButtonProps> = ({
     clearRecording,
     addNotification,
   } = useAppStore();
+
+  // 智能图片预加载
+  const { triggerPreloadOnRecording } = useImagePreloader({
+    enabled: true,
+    priority: 'low', // 低优先级，不影响录音性能
+  });
 
   const [isPressed, setIsPressed] = useState(false);
   const [volumeLevel, setVolumeLevel] = useState(0);
@@ -147,6 +154,9 @@ export const RecordButton: React.FC<RecordButtonProps> = ({
 
       // 录音器准备就绪后，更新store状态并开始计时
       startRecording();
+
+      // 触发智能图片预加载（在录音开始后延迟执行，不影响录音性能）
+      triggerPreloadOnRecording();
 
       // 开始计时 - 确保在状态更新后启动
       let duration = 0;

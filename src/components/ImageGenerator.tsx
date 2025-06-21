@@ -71,19 +71,20 @@ export const ImageGenerator: React.FC<ImageGeneratorProps> = ({
           <div className="absolute inset-0 flex flex-col items-center justify-center text-neutral-500">
             <PhotoIcon className="w-12 h-12 mb-2" />
             <p className="text-sm">图片加载失败</p>
-            <p className="text-xs text-gray-400 mt-1">{image.url}</p>
+            <p className="text-xs text-gray-400 mt-1 break-all">{image.url.substring(0, 100)}...</p>
           </div>
         ) : (
-          <Image
-            src={image.url}
-            alt={`${image.style} mood image`}
-            fill
-            className="object-cover"
-            onLoad={handleImageLoad}
-            onError={handleImageError}
-            priority
-            unoptimized={image.url.endsWith('.svg')} // SVG文件不需要优化
-          />
+          <>
+            {/* 统一使用img标签处理所有图片格式 */}
+            <img
+              src={image.url}
+              alt={`${image.style} mood image`}
+              className="w-full h-full object-cover"
+              onLoad={handleImageLoad}
+              onError={handleImageError}
+              style={{ display: isLoading ? 'none' : 'block' }}
+            />
+          </>
         )}
 
         {/* 图片样式标签 */}

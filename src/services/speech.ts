@@ -1,6 +1,6 @@
 /**
  * 语音转文字服务
- * 集成多个语音识别服务作为备选方案
+ * 通过API调用实现与用户说话内容完全一致的转录
  */
 
 export interface TranscriptionResult {
@@ -8,6 +8,7 @@ export interface TranscriptionResult {
   confidence: number;
   language?: string;
   duration?: number;
+  isExact?: boolean;
 }
 
 export interface TranscriptionOptions {
@@ -15,12 +16,13 @@ export interface TranscriptionOptions {
   model?: string;
   temperature?: number;
   maxRetries?: number;
+  requireExact?: boolean;
 }
 
 export class SpeechService {
   /**
    * 主要的语音转文字方法
-   * 目前使用模拟实现，后续可以集成真实的语音识别服务
+   * 通过服务端API实现精确转录
    */
   static async transcribeAudio(
     audioBlob: Blob,
@@ -28,39 +30,83 @@ export class SpeechService {
   ): Promise<TranscriptionResult> {
     const {
       language = 'zh-CN',
-      maxRetries = 3
+      maxRetries = 2,
+      requireExact = true,
     } = options;
 
-    console.log('开始语音转文字处理...');
-    console.log('音频文件大小:', audioBlob.size, 'bytes');
-    console.log('音频文件类型:', audioBlob.type);
+    console.log('🎯 开始精确语音转录，要求完全一致');
+    console.log('📊 音频信息:', {
+      size: audioBlob.size,
+      type: audioBlob.type,
+      requireExact: requireExact
+    });
 
-    // 模拟处理延迟
-    await new Promise(resolve => setTimeout(resolve, 1000));
+    if (requireExact) {
+      try {
+        // 通过API调用服务端的Amazon Transcribe
+        console.log('🚀 通过API调用精确转录服务');
+        
+        const formData = new FormData();
+        formData.append('audio', audioBlob, 'recording.webm');
+        formData.append('language', language);
 
-    // 根据音频大小生成不同的模拟文本
-    const audioSizeKB = audioBlob.size / 1024;
-    let mockText = '';
-    
-    if (audioSizeKB < 10) {
-      mockText = '你好';
-    } else if (audioSizeKB < 30) {
-      mockText = '今天天气真不错';
-    } else if (audioSizeKB < 50) {
-      mockText = '我现在心情很好，想要分享一下我的感受';
-    } else {
-      mockText = '这是一段比较长的语音内容，我想要表达我现在的心情和想法，希望能够通过这个应用来记录我的生活点滴';
+        const response = await fetch('/api/voice/transcribe-exact', {
+          method: 'POST',
+          body: formData,
+        });
+
+        if (!response.ok) {
+          throw new Error(`API调用失败: ${response.status} ${response.statusText}`);
+        }
+
+        const result = await response.json();
+        
+        if (!result.success) {
+          throw new Error(result.error?.message || 'API返回错误');
+        }
+
+        console.log('✅ 精确转录完成:', result.data);
+
+        return {
+          text: result.data.text,
+          confidence: result.data.confidence,
+          language: result.data.language,
+          duration: result.data.duration,
+          isExact: true,
+        };
+
+      } catch (error) {
+        console.error('❌ 精确转录失败:', error);
+        
+        // 如果要求完全一致但失败了，不降级到模拟
+        throw new Error(`精确转录失败: ${error instanceof Error ? error.message : '未知错误'}`);
+      }
     }
 
-    const result: TranscriptionResult = {
-      text: mockText,
-      confidence: 0.95,
-      language: language,
-      duration: Math.round(audioSizeKB / 8) // 粗略估算时长
-    };
+    // 如果不要求完全一致，使用智能模拟（这个分支通常不会执行）
+    console.log('🔄 使用智能模拟转录');
+    return await this.simulateTranscription(audioBlob, options);
+  }
 
-    console.log('语音转文字完成:', result);
-    return result;
+  /**
+   * 智能模拟转录（仅作为备用，通常不使用）
+   */
+  private static async simulateTranscription(
+    audioBlob: Blob,
+    options: TranscriptionOptions
+  ): Promise<TranscriptionResult> {
+    console.warn('⚠️ 注意：使用模拟转录，无法保证与用户说话内容完全一致');
+    
+    // 模拟处理时间
+    await new Promise(resolve => setTimeout(resolve, 2000));
+
+    return {
+      text: '模拟转录结果（非精确）',
+      confidence: 0.5,
+      language: options.language || 'zh-CN',
+      duration: audioBlob.size / 8000,
+      isExact: false,
+    };
   }
 
   /**
@@ -70,14 +116,17 @@ export class SpeechService {
     if (!result.text || result.text.trim().length === 0) {
       return false;
     }
-
+    
+    // 如果要求精确转录，检查isExact标志
+    if (result.isExact === false) {
+      console.warn('⚠️ 转录结果不是精确的');
+    }
+    
     if (result.confidence < 0.3) {
       return false;
     }
-
-    // 检查是否包含有意义的内容
-    const meaningfulLength = result.text.replace(/[^\w\u4e00-\u9fff]/g, '').length;
-    return meaningfulLength >= 1;
+    
+    return true;
   }
 
   /**
@@ -95,9 +144,19 @@ export class SpeechService {
   }
 
   /**
-   * 检查语言是否支持
+   * 检查服务可用性
    */
-  static isLanguageSupported(language: string): boolean {
-    return this.getSupportedLanguages().includes(language);
+  static async checkServiceHealth(): Promise<boolean> {
+    try {
+      // 检查API端点可用性
+      const response = await fetch('/api/voice/transcribe-exact', {
+        method: 'OPTIONS',
+      });
+      
+      return response.status !== 404;
+    } catch (error) {
+      console.error('❌ 语音服务健康检查失败:', error);
+      return false;
+    }
   }
 }

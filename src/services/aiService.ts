@@ -98,7 +98,7 @@ export class AIService {
           const imageResult = await this.withTimeout(
             useAmazonServices 
               ? this.novaCanvasService.generateImage(transcript, sentiment, { style: imageStyle as any })
-              : NovaService.generateImage({
+              : this.generateImageViaAPI({
                   prompt: imagePrompt,
                   style: imageStyle,
                   width: 512,
@@ -196,8 +196,8 @@ export class AIService {
         style
       );
 
-      // 生成图片
-      const novaResponse = await NovaService.generateImage({
+      // 生成图片 - 通过API路由调用，避免在前端访问AWS凭证
+      const novaResponse = await this.generateImageViaAPI({
         prompt: imagePrompt,
         style,
         width: 512,
@@ -247,12 +247,11 @@ export class AIService {
     style: string = 'abstract'
   ): Promise<GeneratedImage> {
     try {
-      const novaResponse = await NovaService.generateImage({
+      const novaResponse = await this.generateImageViaAPI({
         prompt: imagePrompt,
         style,
         width: 512,
         height: 512,
-        seed: Math.floor(Math.random() * 1000000), // 随机种子
       });
 
       return {
@@ -284,6 +283,50 @@ export class AIService {
       stage: 'completed',
       completed: true,
     };
+  }
+
+  /**
+   * 通过API路由生成图片（避免在前端访问AWS凭证）
+   */
+  private static async generateImageViaAPI(request: {
+    prompt: string;
+    style?: string;
+    width?: number;
+    height?: number;
+  }): Promise<{ imageUrl: string; imageData?: string; metadata: any }> {
+    console.log('🎨 通过API路由生成图片:', {
+      prompt: request.prompt.substring(0, 100) + (request.prompt.length > 100 ? '...' : ''),
+      style: request.style
+    });
+
+    try {
+      const response = await fetch('/api/image/generate', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(request),
+      });
+
+      if (!response.ok) {
+        throw new Error(`图片生成API调用失败: ${response.status} ${response.statusText}`);
+      }
+
+      const result = await response.json();
+      console.log('✅ API路由图片生成成功，响应数据:', result);
+      
+      // API返回的数据结构是 { success: true, data: {...} }
+      const imageData = result.data || result;
+      
+      return {
+        imageUrl: imageData.imageUrl,
+        imageData: imageData.imageData,
+        metadata: imageData.metadata
+      };
+    } catch (error) {
+      console.error('❌ API路由图片生成失败:', error);
+      throw error;
+    }
   }
 
   /**
@@ -373,8 +416,8 @@ export class AIService {
     }
 
     try {
-      // 测试图片生成服务
-      await NovaService.generateImage({ prompt: 'test prompt' });
+      // 测试图片生成服务 - 通过API路由
+      await this.generateImageViaAPI({ prompt: 'test prompt' });
       status.imageGeneration = true;
     } catch {
       // 图片生成服务不可用
