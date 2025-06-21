@@ -1,0 +1,416 @@
+# ElastiCache Redis集群配置 - 性能优化
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'Vomage ElastiCache Redis集群 - 高性能缓存'
+
+Parameters:
+  Environment:
+    Type: String
+    Default: production
+    AllowedValues: [development, staging, production]
+  
+  VpcId:
+    Type: AWS::EC2::VPC::Id
+    Description: VPC ID for Redis cluster
+  
+  SubnetIds:
+    Type: List<AWS::EC2::Subnet::Id>
+    Description: Subnet IDs for Redis cluster (minimum 2)
+
+  NodeType:
+    Type: String
+    Default: cache.r6g.large
+    AllowedValues: 
+      - cache.r6g.large
+      - cache.r6g.xlarge
+      - cache.r6g.2xlarge
+      - cache.r6g.4xlarge
+    Description: Redis node instance type
+
+Mappings:
+  EnvironmentConfig:
+    development:
+      NumCacheNodes: 1
+      MultiAZ: false
+      AutomaticFailover: false
+      SnapshotRetentionLimit: 1
+    staging:
+      NumCacheNodes: 2
+      MultiAZ: true
+      AutomaticFailover: true
+      SnapshotRetentionLimit: 3
+    production:
+      NumCacheNodes: 3
+      MultiAZ: true
+      AutomaticFailover: true
+      SnapshotRetentionLimit: 7
+
+Resources:
+  # Redis子网组
+  RedisSubnetGroup:
+    Type: AWS::ElastiCache::SubnetGroup
+    Properties:
+      Description: !Sub 'Subnet group for Vomage Redis cluster - ${Environment}'
+      SubnetIds: !Ref SubnetIds
+      CacheSubnetGroupName: !Sub 'vomage-redis-subnet-group-${Environment}'
+
+  # Redis参数组 - 性能优化配置
+  RedisParameterGroup:
+    Type: AWS::ElastiCache::ParameterGroup
+    Properties:
+      CacheParameterGroupFamily: redis7.x
+      Description: !Sub 'Vomage Redis parameter group - ${Environment}'
+      Properties:
+        # 内存管理优化
+        maxmemory-policy: allkeys-lru
+        # 持久化配置
+        save: "900 1 300 10 60 10000"
+        # 网络优化
+        tcp-keepalive: 300
+        timeout: 0
+        # 性能优化
+        hash-max-ziplist-entries: 512
+        hash-max-ziplist-value: 64
+        list-max-ziplist-size: -2
+        list-compress-depth: 0
+        set-max-intset-entries: 512
+        zset-max-ziplist-entries: 128
+        zset-max-ziplist-value: 64
+        # 日志级别
+        loglevel: notice
+        # 慢查询日志
+        slowlog-log-slower-than: 10000
+        slowlog-max-len: 128
+
+  # Redis安全组
+  RedisSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: !Sub 'Security group for Vomage Redis cluster - ${Environment}'
+      VpcId: !Ref VpcId
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 6379
+          ToPort: 6379
+          SourceSecurityGroupId: !Ref ECSSecurityGroup
+          Description: 'Allow Redis access from ECS services'
+        - IpProtocol: tcp
+          FromPort: 6379
+          ToPort: 6379
+          SourceSecurityGroupId: !Ref LambdaSecurityGroup
+          Description: 'Allow Redis access from Lambda functions'
+      Tags:
+        - Key: Name
+          Value: !Sub 'vomage-redis-sg-${Environment}'
+
+  # ECS服务安全组引用
+  ECSSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: !Sub 'Security group for ECS services - ${Environment}'
+      VpcId: !Ref VpcId
+      Tags:
+        - Key: Name
+          Value: !Sub 'vomage-ecs-sg-${Environment}'
+
+  # Lambda函数安全组
+  LambdaSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: !Sub 'Security group for Lambda functions - ${Environment}'
+      VpcId: !Ref VpcId
+      SecurityGroupEgress:
+        - IpProtocol: tcp
+          FromPort: 6379
+          ToPort: 6379
+          DestinationSecurityGroupId: !Ref RedisSecurityGroup
+          Description: 'Allow Lambda to access Redis'
+        - IpProtocol: tcp
+          FromPort: 443
+          ToPort: 443
+          CidrIp: 0.0.0.0/0
+          Description: 'Allow HTTPS outbound'
+      Tags:
+        - Key: Name
+          Value: !Sub 'vomage-lambda-sg-${Environment}'
+
+  # Redis复制组 (集群模式)
+  RedisReplicationGroup:
+    Type: AWS::ElastiCache::ReplicationGroup
+    Properties:
+      ReplicationGroupId: !Sub 'vomage-redis-${Environment}'
+      Description: !Sub 'Vomage Redis cluster for ${Environment} environment'
+      
+      # 节点配置
+      CacheNodeType: !Ref NodeType
+      NumCacheClusters: !FindInMap [EnvironmentConfig, !Ref Environment, NumCacheNodes]
+      
+      # 引擎配置
+      Engine: redis
+      EngineVersion: 7.0.7
+      Port: 6379
+      
+      # 参数和子网组
+      CacheParameterGroupName: !Ref RedisParameterGroup
+      CacheSubnetGroupName: !Ref RedisSubnetGroup
+      SecurityGroupIds:
+        - !Ref RedisSecurityGroup
+      
+      # 高可用配置
+      MultiAZEnabled: !FindInMap [EnvironmentConfig, !Ref Environment, MultiAZ]
+      AutomaticFailoverEnabled: !FindInMap [EnvironmentConfig, !Ref Environment, AutomaticFailover]
+      
+      # 备份配置
+      SnapshotRetentionLimit: !FindInMap [EnvironmentConfig, !Ref Environment, SnapshotRetentionLimit]
+      SnapshotWindow: "03:00-05:00"
+      PreferredMaintenanceWindow: "sun:05:00-sun:07:00"
+      
+      # 通知配置
+      NotificationTopicArn: !Ref RedisNotificationTopic
+      
+      # 日志配置
+      LogDeliveryConfigurations:
+        - DestinationType: cloudwatch-logs
+          DestinationDetails:
+            LogGroup: !Ref RedisLogGroup
+          LogFormat: json
+          LogType: slow-log
+        - DestinationType: cloudwatch-logs
+          DestinationDetails:
+            LogGroup: !Ref RedisLogGroup
+          LogFormat: json
+          LogType: engine-log
+      
+      # 标签
+      Tags:
+        - Key: Name
+          Value: !Sub 'vomage-redis-${Environment}'
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: Application
+          Value: Vomage
+        - Key: Component
+          Value: Cache
+
+  # CloudWatch日志组
+  RedisLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub '/aws/elasticache/vomage-redis-${Environment}'
+      RetentionInDays: 30
+      Tags:
+        - Key: Name
+          Value: !Sub 'vomage-redis-logs-${Environment}'
+
+  # SNS通知主题
+  RedisNotificationTopic:
+    Type: AWS::SNS::Topic
+    Properties:
+      TopicName: !Sub 'vomage-redis-notifications-${Environment}'
+      DisplayName: !Sub 'Vomage Redis Notifications - ${Environment}'
+      Tags:
+        - Key: Name
+          Value: !Sub 'vomage-redis-notifications-${Environment}'
+
+  # CloudWatch告警 - 内存使用率
+  RedisMemoryAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub 'vomage-redis-memory-${Environment}'
+      AlarmDescription: 'Redis memory utilization is high'
+      MetricName: DatabaseMemoryUsagePercentage
+      Namespace: AWS/ElastiCache
+      Statistic: Average
+      Period: 300
+      EvaluationPeriods: 2
+      Threshold: 80
+      ComparisonOperator: GreaterThanThreshold
+      Dimensions:
+        - Name: CacheClusterId
+          Value: !Sub '${RedisReplicationGroup}-001'
+      AlarmActions:
+        - !Ref RedisNotificationTopic
+      TreatMissingData: notBreaching
+
+  # CloudWatch告警 - CPU使用率
+  RedisCPUAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub 'vomage-redis-cpu-${Environment}'
+      AlarmDescription: 'Redis CPU utilization is high'
+      MetricName: CPUUtilization
+      Namespace: AWS/ElastiCache
+      Statistic: Average
+      Period: 300
+      EvaluationPeriods: 2
+      Threshold: 75
+      ComparisonOperator: GreaterThanThreshold
+      Dimensions:
+        - Name: CacheClusterId
+          Value: !Sub '${RedisReplicationGroup}-001'
+      AlarmActions:
+        - !Ref RedisNotificationTopic
+      TreatMissingData: notBreaching
+
+  # CloudWatch告警 - 连接数
+  RedisConnectionsAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub 'vomage-redis-connections-${Environment}'
+      AlarmDescription: 'Redis connection count is high'
+      MetricName: CurrConnections
+      Namespace: AWS/ElastiCache
+      Statistic: Average
+      Period: 300
+      EvaluationPeriods: 2
+      Threshold: 100
+      ComparisonOperator: GreaterThanThreshold
+      Dimensions:
+        - Name: CacheClusterId
+          Value: !Sub '${RedisReplicationGroup}-001'
+      AlarmActions:
+        - !Ref RedisNotificationTopic
+      TreatMissingData: notBreaching
+
+  # CloudWatch告警 - 缓存命中率
+  RedisCacheHitRateAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub 'vomage-redis-cache-hit-rate-${Environment}'
+      AlarmDescription: 'Redis cache hit rate is low'
+      MetricName: CacheHitRate
+      Namespace: AWS/ElastiCache
+      Statistic: Average
+      Period: 300
+      EvaluationPeriods: 3
+      Threshold: 80
+      ComparisonOperator: LessThanThreshold
+      Dimensions:
+        - Name: CacheClusterId
+          Value: !Sub '${RedisReplicationGroup}-001'
+      AlarmActions:
+        - !Ref RedisNotificationTopic
+      TreatMissingData: notBreaching
+
+  # CloudWatch仪表板
+  RedisDashboard:
+    Type: AWS::CloudWatch::Dashboard
+    Properties:
+      DashboardName: !Sub 'Vomage-Redis-${Environment}'
+      DashboardBody: !Sub |
+        {
+          "widgets": [
+            {
+              "type": "metric",
+              "x": 0,
+              "y": 0,
+              "width": 12,
+              "height": 6,
+              "properties": {
+                "metrics": [
+                  [ "AWS/ElastiCache", "DatabaseMemoryUsagePercentage", "CacheClusterId", "${RedisReplicationGroup}-001" ],
+                  [ ".", "CPUUtilization", ".", "." ]
+                ],
+                "view": "timeSeries",
+                "stacked": false,
+                "region": "${AWS::Region}",
+                "title": "Redis Performance Metrics",
+                "period": 300
+              }
+            },
+            {
+              "type": "metric",
+              "x": 12,
+              "y": 0,
+              "width": 12,
+              "height": 6,
+              "properties": {
+                "metrics": [
+                  [ "AWS/ElastiCache", "CacheHitRate", "CacheClusterId", "${RedisReplicationGroup}-001" ],
+                  [ ".", "CacheMissRate", ".", "." ]
+                ],
+                "view": "timeSeries",
+                "stacked": false,
+                "region": "${AWS::Region}",
+                "title": "Cache Hit/Miss Rate",
+                "period": 300
+              }
+            },
+            {
+              "type": "metric",
+              "x": 0,
+              "y": 6,
+              "width": 12,
+              "height": 6,
+              "properties": {
+                "metrics": [
+                  [ "AWS/ElastiCache", "CurrConnections", "CacheClusterId", "${RedisReplicationGroup}-001" ],
+                  [ ".", "NewConnections", ".", "." ]
+                ],
+                "view": "timeSeries",
+                "stacked": false,
+                "region": "${AWS::Region}",
+                "title": "Connection Metrics",
+                "period": 300
+              }
+            },
+            {
+              "type": "metric",
+              "x": 12,
+              "y": 6,
+              "width": 12,
+              "height": 6,
+              "properties": {
+                "metrics": [
+                  [ "AWS/ElastiCache", "NetworkBytesIn", "CacheClusterId", "${RedisReplicationGroup}-001" ],
+                  [ ".", "NetworkBytesOut", ".", "." ]
+                ],
+                "view": "timeSeries",
+                "stacked": false,
+                "region": "${AWS::Region}",
+                "title": "Network I/O",
+                "period": 300
+              }
+            }
+          ]
+        }
+
+Outputs:
+  RedisEndpoint:
+    Description: Redis primary endpoint
+    Value: !GetAtt RedisReplicationGroup.PrimaryEndPoint.Address
+    Export:
+      Name: !Sub '${AWS::StackName}-RedisEndpoint'
+
+  RedisPort:
+    Description: Redis port
+    Value: !GetAtt RedisReplicationGroup.PrimaryEndPoint.Port
+    Export:
+      Name: !Sub '${AWS::StackName}-RedisPort'
+
+  RedisReaderEndpoint:
+    Description: Redis reader endpoint
+    Value: !GetAtt RedisReplicationGroup.ReaderEndPoint.Address
+    Export:
+      Name: !Sub '${AWS::StackName}-RedisReaderEndpoint'
+    Condition: IsMultiAZ
+
+  RedisSecurityGroupId:
+    Description: Redis security group ID
+    Value: !Ref RedisSecurityGroup
+    Export:
+      Name: !Sub '${AWS::StackName}-RedisSecurityGroupId'
+
+  LambdaSecurityGroupId:
+    Description: Lambda security group ID for Redis access
+    Value: !Ref LambdaSecurityGroup
+    Export:
+      Name: !Sub '${AWS::StackName}-LambdaSecurityGroupId'
+
+  RedisNotificationTopicArn:
+    Description: SNS topic ARN for Redis notifications
+    Value: !Ref RedisNotificationTopic
+    Export:
+      Name: !Sub '${AWS::StackName}-RedisNotificationTopicArn'
+
+Conditions:
+  IsMultiAZ: !Not [!Equals [!Ref Environment, development]]
