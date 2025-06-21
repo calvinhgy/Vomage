@@ -1,0 +1,157 @@
+# Artillery负载测试配置
+# 测试Vomage应用的负载处理能力
+
+config:
+  target: 'http://localhost:3000'
+  phases:
+    # 预热阶段
+    - duration: 60
+      arrivalRate: 1
+      name: "预热阶段"
+    
+    # 逐步增加负载
+    - duration: 120
+      arrivalRate: 5
+      rampTo: 20
+      name: "负载增长阶段"
+    
+    # 高负载测试
+    - duration: 180
+      arrivalRate: 20
+      name: "高负载测试阶段"
+    
+    # 峰值测试
+    - duration: 60
+      arrivalRate: 50
+      name: "峰值负载测试"
+    
+    # 负载下降
+    - duration: 60
+      arrivalRate: 50
+      rampTo: 5
+      name: "负载下降阶段"
+
+  # 性能指标阈值
+  ensure:
+    p95: 2000  # 95%的请求响应时间小于2秒
+    p99: 5000  # 99%的请求响应时间小于5秒
+    maxErrorRate: 5  # 错误率小于5%
+
+  # 插件配置
+  plugins:
+    metrics-by-endpoint:
+      useOnlyRequestNames: true
+
+scenarios:
+  # 主页访问测试
+  - name: "主页访问"
+    weight: 30
+    flow:
+      - get:
+          url: "/"
+          name: "访问主页"
+          expect:
+            - statusCode: 200
+            - contentType: "text/html"
+          capture:
+            - header: "x-response-time"
+              as: "responseTime"
+
+  # API端点测试
+  - name: "API健康检查"
+    weight: 20
+    flow:
+      - get:
+          url: "/api/health"
+          name: "健康检查API"
+          expect:
+            - statusCode: 200
+            - contentType: "application/json"
+
+  # 语音处理API测试
+  - name: "语音处理API"
+    weight: 25
+    flow:
+      - post:
+          url: "/api/voice/process"
+          name: "语音处理API"
+          headers:
+            Content-Type: "multipart/form-data"
+          formData:
+            audio: "@tests/fixtures/sample-audio.webm"
+            userId: "load-test-user-{{ $randomString() }}"
+          expect:
+            - statusCode: [200, 202]
+          capture:
+            - json: "$.data.requestId"
+              as: "requestId"
+      
+      # 查询处理状态
+      - get:
+          url: "/api/voice/status/{{ requestId }}"
+          name: "查询处理状态"
+          expect:
+            - statusCode: 200
+
+  # 图片生成API测试
+  - name: "图片生成API"
+    weight: 15
+    flow:
+      - post:
+          url: "/api/image/generate"
+          name: "图片生成API"
+          json:
+            prompt: "beautiful landscape with mountains {{ $randomString() }}"
+            style: "photorealistic"
+            dimensions:
+              width: 512
+              height: 512
+          expect:
+            - statusCode: [200, 202]
+
+  # 用户认证测试
+  - name: "用户认证"
+    weight: 10
+    flow:
+      - post:
+          url: "/api/auth/login"
+          name: "用户登录"
+          json:
+            email: "test-{{ $randomString() }}@example.com"
+            password: "testpassword123"
+          expect:
+            - statusCode: [200, 401]
+          capture:
+            - json: "$.token"
+              as: "authToken"
+              ifExists: true
+
+# 自定义函数
+functions:
+  generateRandomAudio:
+    - log: "生成随机音频数据"
+
+# 钩子函数
+hooks:
+  beforeScenario:
+    - log: "开始场景测试: {{ $scenarioName }}"
+  
+  afterScenario:
+    - log: "完成场景测试: {{ $scenarioName }}"
+
+# 报告配置
+reporting:
+  output:
+    - json
+    - html
+  
+  # 自定义指标
+  customMetrics:
+    - name: "语音处理成功率"
+      expression: "rate(http_requests{endpoint='/api/voice/process',status='200'})"
+    
+    - name: "图片生成成功率"
+      expression: "rate(http_requests{endpoint='/api/image/generate',status='200'})"
+    
+    - name: "平均响应时间"
+      expression: "avg(http_request_duration)"

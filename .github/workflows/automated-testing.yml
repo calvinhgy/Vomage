@@ -1,0 +1,413 @@
+name: 🧪 Automated Testing Pipeline
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main, develop ]
+  schedule:
+    # 每天凌晨2点运行完整测试套件
+    - cron: '0 2 * * *'
+
+env:
+  NODE_VERSION: '18'
+  MONGODB_VERSION: '5.0'
+  REDIS_VERSION: '6.2'
+
+jobs:
+  # 代码质量检查
+  code-quality:
+    name: 📋 Code Quality
+    runs-on: ubuntu-latest
+    steps:
+      - name: 📥 Checkout code
+        uses: actions/checkout@v4
+
+      - name: 📦 Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+
+      - name: 📥 Install dependencies
+        run: npm ci
+
+      - name: 🔍 Type checking
+        run: npm run type-check
+
+      - name: 🧹 Linting
+        run: npm run lint
+
+      - name: 💅 Format checking
+        run: npm run format -- --check
+
+  # 单元测试
+  unit-tests:
+    name: 🧪 Unit Tests
+    runs-on: ubuntu-latest
+    needs: code-quality
+    steps:
+      - name: 📥 Checkout code
+        uses: actions/checkout@v4
+
+      - name: 📦 Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+
+      - name: 📥 Install dependencies
+        run: npm ci
+
+      - name: 🧪 Run unit tests
+        run: npm run test:unit:coverage
+
+      - name: 📊 Upload coverage to Codecov
+        uses: codecov/codecov-action@v3
+        with:
+          file: ./coverage/lcov.info
+          flags: unittests
+          name: codecov-umbrella
+
+      - name: 📋 Comment coverage on PR
+        if: github.event_name == 'pull_request'
+        uses: romeovs/lcov-reporter-action@v0.3.1
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          lcov-file: ./coverage/lcov.info
+
+  # 集成测试
+  integration-tests:
+    name: 🔗 Integration Tests
+    runs-on: ubuntu-latest
+    needs: code-quality
+    services:
+      mongodb:
+        image: mongo:${{ env.MONGODB_VERSION }}
+        ports:
+          - 27017:27017
+        options: >-
+          --health-cmd "mongosh --eval 'db.runCommand({ping: 1})'"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+      redis:
+        image: redis:${{ env.REDIS_VERSION }}
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+      - name: 📥 Checkout code
+        uses: actions/checkout@v4
+
+      - name: 📦 Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+
+      - name: 📥 Install dependencies
+        run: npm ci
+
+      - name: 🔗 Run integration tests
+        run: npm run test:integration
+        env:
+          MONGODB_URI: mongodb://localhost:27017/vomage-test
+          REDIS_URL: redis://localhost:6379
+          NODE_ENV: test
+
+      - name: 📊 Upload test results
+        if: always()
+        uses: actions/upload-artifact@v3
+        with:
+          name: integration-test-results
+          path: test-results/
+
+  # 端到端测试
+  e2e-tests:
+    name: 🌐 E2E Tests
+    runs-on: ubuntu-latest
+    needs: [unit-tests, integration-tests]
+    strategy:
+      matrix:
+        browser: [chromium, firefox, webkit]
+        device: [desktop, mobile]
+        exclude:
+          # Firefox在移动端测试中可能不稳定
+          - browser: firefox
+            device: mobile
+    steps:
+      - name: 📥 Checkout code
+        uses: actions/checkout@v4
+
+      - name: 📦 Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+
+      - name: 📥 Install dependencies
+        run: npm ci
+
+      - name: 🎭 Install Playwright
+        run: npm run playwright:install
+
+      - name: 🏗️ Build application
+        run: npm run build
+
+      - name: 🌐 Run E2E tests
+        run: |
+          if [ "${{ matrix.device }}" = "mobile" ]; then
+            npx playwright test --project="Mobile*"
+          else
+            npx playwright test --project="${{ matrix.browser }}"
+          fi
+        env:
+          TEST_BASE_URL: http://localhost:3000
+
+      - name: 📊 Upload E2E test results
+        if: always()
+        uses: actions/upload-artifact@v3
+        with:
+          name: e2e-test-results-${{ matrix.browser }}-${{ matrix.device }}
+          path: |
+            test-results/
+            playwright-report/
+
+  # 性能测试
+  performance-tests:
+    name: ⚡ Performance Tests
+    runs-on: ubuntu-latest
+    needs: e2e-tests
+    if: github.ref == 'refs/heads/main' || github.event_name == 'schedule'
+    steps:
+      - name: 📥 Checkout code
+        uses: actions/checkout@v4
+
+      - name: 📦 Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+
+      - name: 📥 Install dependencies
+        run: npm ci
+
+      - name: 📥 Install Artillery
+        run: npm install -g artillery@latest
+
+      - name: 🏗️ Build application
+        run: npm run build
+
+      - name: 🚀 Start application
+        run: npm start &
+        env:
+          PORT: 3000
+
+      - name: ⏳ Wait for application
+        run: |
+          timeout 60 bash -c 'until curl -f http://localhost:3000/api/health; do sleep 2; done'
+
+      - name: ⚡ Run performance tests
+        run: npm run test:performance
+
+      - name: 📊 Upload performance results
+        if: always()
+        uses: actions/upload-artifact@v3
+        with:
+          name: performance-test-results
+          path: test-results/performance/
+
+  # 安全测试
+  security-tests:
+    name: 🔒 Security Tests
+    runs-on: ubuntu-latest
+    needs: code-quality
+    steps:
+      - name: 📥 Checkout code
+        uses: actions/checkout@v4
+
+      - name: 🔍 Run Snyk security scan
+        uses: snyk/actions/node@master
+        env:
+          SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
+        with:
+          args: --severity-threshold=high
+
+      - name: 🔒 Run CodeQL analysis
+        uses: github/codeql-action/init@v2
+        with:
+          languages: javascript
+
+      - name: 🏗️ Autobuild
+        uses: github/codeql-action/autobuild@v2
+
+      - name: 🔍 Perform CodeQL analysis
+        uses: github/codeql-action/analyze@v2
+
+  # 测试报告汇总
+  test-summary:
+    name: 📊 Test Summary
+    runs-on: ubuntu-latest
+    needs: [unit-tests, integration-tests, e2e-tests, performance-tests, security-tests]
+    if: always()
+    steps:
+      - name: 📥 Download all test artifacts
+        uses: actions/download-artifact@v3
+
+      - name: 📊 Generate test summary
+        run: |
+          echo "# 🧪 测试执行总结" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "## 📋 测试结果概览" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          
+          # 检查各个测试任务的状态
+          if [ "${{ needs.unit-tests.result }}" = "success" ]; then
+            echo "✅ 单元测试: 通过" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "❌ 单元测试: 失败" >> $GITHUB_STEP_SUMMARY
+          fi
+          
+          if [ "${{ needs.integration-tests.result }}" = "success" ]; then
+            echo "✅ 集成测试: 通过" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "❌ 集成测试: 失败" >> $GITHUB_STEP_SUMMARY
+          fi
+          
+          if [ "${{ needs.e2e-tests.result }}" = "success" ]; then
+            echo "✅ 端到端测试: 通过" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "❌ 端到端测试: 失败" >> $GITHUB_STEP_SUMMARY
+          fi
+          
+          if [ "${{ needs.performance-tests.result }}" = "success" ]; then
+            echo "✅ 性能测试: 通过" >> $GITHUB_STEP_SUMMARY
+          elif [ "${{ needs.performance-tests.result }}" = "skipped" ]; then
+            echo "⏭️ 性能测试: 跳过" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "❌ 性能测试: 失败" >> $GITHUB_STEP_SUMMARY
+          fi
+          
+          if [ "${{ needs.security-tests.result }}" = "success" ]; then
+            echo "✅ 安全测试: 通过" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "❌ 安全测试: 失败" >> $GITHUB_STEP_SUMMARY
+          fi
+          
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "## 📈 详细报告" >> $GITHUB_STEP_SUMMARY
+          echo "详细的测试报告请查看各个任务的输出和上传的测试结果文件。" >> $GITHUB_STEP_SUMMARY
+
+      - name: 💬 Comment on PR
+        if: github.event_name == 'pull_request'
+        uses: actions/github-script@v6
+        with:
+          script: |
+            const { data: comments } = await github.rest.issues.listComments({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+            });
+            
+            const botComment = comments.find(comment => 
+              comment.user.type === 'Bot' && comment.body.includes('🧪 自动化测试结果')
+            );
+            
+            const testResults = {
+              unit: '${{ needs.unit-tests.result }}',
+              integration: '${{ needs.integration-tests.result }}',
+              e2e: '${{ needs.e2e-tests.result }}',
+              performance: '${{ needs.performance-tests.result }}',
+              security: '${{ needs.security-tests.result }}'
+            };
+            
+            const getStatusEmoji = (status) => {
+              switch(status) {
+                case 'success': return '✅';
+                case 'failure': return '❌';
+                case 'skipped': return '⏭️';
+                default: return '⏳';
+              }
+            };
+            
+            const commentBody = `## 🧪 自动化测试结果
+            
+            | 测试类型 | 状态 | 结果 |
+            |---------|------|------|
+            | 单元测试 | ${getStatusEmoji(testResults.unit)} | ${testResults.unit} |
+            | 集成测试 | ${getStatusEmoji(testResults.integration)} | ${testResults.integration} |
+            | 端到端测试 | ${getStatusEmoji(testResults.e2e)} | ${testResults.e2e} |
+            | 性能测试 | ${getStatusEmoji(testResults.performance)} | ${testResults.performance} |
+            | 安全测试 | ${getStatusEmoji(testResults.security)} | ${testResults.security} |
+            
+            📊 **测试覆盖率报告**: 请查看上方的覆盖率评论
+            📋 **详细报告**: 请查看各个检查的详细输出
+            
+            ---
+            *此评论由自动化测试流水线生成 🤖*`;
+            
+            if (botComment) {
+              await github.rest.issues.updateComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                comment_id: botComment.id,
+                body: commentBody
+              });
+            } else {
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: context.issue.number,
+                body: commentBody
+              });
+            }
+
+  # 部署到测试环境
+  deploy-staging:
+    name: 🚀 Deploy to Staging
+    runs-on: ubuntu-latest
+    needs: [unit-tests, integration-tests, e2e-tests]
+    if: github.ref == 'refs/heads/develop' && github.event_name == 'push'
+    environment: staging
+    steps:
+      - name: 📥 Checkout code
+        uses: actions/checkout@v4
+
+      - name: 🚀 Deploy to staging
+        run: |
+          echo "部署到测试环境..."
+          # 这里添加实际的部署脚本
+          # 例如: AWS CLI, Docker, Kubernetes等
+
+      - name: 🧪 Run smoke tests
+        run: |
+          echo "运行冒烟测试..."
+          # 部署后的基本功能验证
+
+  # 部署到生产环境
+  deploy-production:
+    name: 🌟 Deploy to Production
+    runs-on: ubuntu-latest
+    needs: [unit-tests, integration-tests, e2e-tests, performance-tests, security-tests]
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    environment: production
+    steps:
+      - name: 📥 Checkout code
+        uses: actions/checkout@v4
+
+      - name: 🌟 Deploy to production
+        run: |
+          echo "部署到生产环境..."
+          # 这里添加实际的生产部署脚本
+
+      - name: 🧪 Run production smoke tests
+        run: |
+          echo "运行生产环境冒烟测试..."
+          # 生产环境部署后验证
